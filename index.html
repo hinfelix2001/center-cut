@@ -1012,10 +1012,11 @@ function showUser(u) {
 /* ---- Remember each visit (users can only write their own record) ---- */
 async function record(u) {
   const F = firebase.firestore.FieldValue, google = u.providerData.some(p => p.providerId === "google.com");
-  await firebase.firestore().collection("users").doc(u.uid).set({
-    email: u.email || "", name: u.displayName || "", provider: google ? "Google" : "Email", photo: u.photoURL || "",
-    createdAt: new Date(u.metadata.creationTime), lastLogin: F.serverTimestamp(), logins: F.increment(1)
-  }, { merge: true });
+  const data = { email: u.email || "", provider: google ? "Google" : "Email",
+    createdAt: new Date(u.metadata.creationTime), lastLogin: F.serverTimestamp(), logins: F.increment(1) };
+  if (u.displayName) data.name = u.displayName;   // don't wipe a name saved by the sign-up form
+  if (u.photoURL) data.photo = u.photoURL;
+  await firebase.firestore().collection("users").doc(u.uid).set(data, { merge: true });
 }
 
 /* ---- Admin panel: only shown when this account is listed in "admins" (checked by the database rules) ---- */
