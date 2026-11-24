@@ -135,6 +135,9 @@ dialog::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
 button.link{background:none;border:0;box-shadow:none;color:var(--muted);text-decoration:underline;padding:4px;font-size:13px;align-self:center}
 button.link:hover:not(:disabled){box-shadow:none;color:#fff}
 .x{position:absolute;top:10px;right:10px;width:34px;height:34px;padding:0;font-size:20px;line-height:1}
+.admin{border-color:rgba(255,255,255,.4);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 0 40px rgba(255,255,255,.08),0 24px 60px rgba(0,0,0,.55)}
+.tbl table.wide{min-width:760px}
+.avatar.sm{width:26px;height:26px;font-size:12px;box-shadow:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #tap.hit{box-shadow:0 0 30px rgba(255,255,255,.9);border-color:#fff}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -175,6 +178,26 @@ button.link:hover:not(:disabled){box-shadow:none;color:#fff}
       <button type="button" class="link" id="aForgot">Forgot password?</button>
     </form>
   </dialog>
+
+  <section class="panel admin" id="adminPanel" hidden aria-labelledby="adm-h">
+    <h2 id="adm-h">Admin · Users</h2>
+    <div class="stats">
+      <div class="stat"><small>Total users</small><strong id="admTotal">–</strong><span>All time</span></div>
+      <div class="stat"><small>New today</small><strong id="admToday">–</strong><span>Signed up today</span></div>
+      <div class="stat"><small>New this week</small><strong id="admWeek">–</strong><span>Last 7 days</span></div>
+      <div class="stat"><small>Active today</small><strong id="admActive">–</strong><span>Visited today</span></div>
+    </div>
+    <div class="run">
+      <button id="admRefresh">Refresh</button>
+      <button id="admCsv">Save list (CSV)</button>
+      <span class="status" id="admStatus" role="status"></span>
+    </div>
+    <div class="tbl"><table class="wide">
+      <thead><tr><th></th><th>Name</th><th>Email</th><th>Sign-in</th><th>Joined</th><th>Last visit</th><th class="num">Visits</th></tr></thead>
+      <tbody id="admRows"></tbody>
+    </table></div>
+    <p class="hint">Only you can see this panel. Other visitors never see it, and the database refuses to show the list to anyone else.</p>
+  </section>
 
   <section class="panel" aria-labelledby="src-h">
     <h2 id="src-h">Source</h2>
@@ -912,7 +935,7 @@ const load = src => new Promise((ok, bad) => { const s = document.createElement(
 let authP = null;
 const getAuth = () => authP || (authP = (async () => {
   if (!FIREBASE_CONFIG) throw new Error("Login isn't connected yet.");
-  await load(SDK + "firebase-app-compat.js"); await load(SDK + "firebase-auth-compat.js");
+  await load(SDK + "firebase-app-compat.js"); await load(SDK + "firebase-auth-compat.js"); await load(SDK + "firebase-firestore-compat.js");
   firebase.initializeApp(FIREBASE_CONFIG);
   const a = firebase.auth(); a.useDeviceLanguage(); return a;
 })());
@@ -952,7 +975,10 @@ $("authForm").addEventListener("submit", async e => {
     const a = await getAuth();
     if (mode === "up") {
       const cred = await a.createUserWithEmailAndPassword(email, pass);
-      if (name) { await cred.user.updateProfile({ displayName: name }); showUser(a.currentUser); }
+      if (name) {
+        await cred.user.updateProfile({ displayName: name }); showUser(a.currentUser);
+        firebase.firestore().collection("users").doc(cred.user.uid).set({ name, email: cred.user.email }, { merge: true }).catch(() => {});
+      }
     } else await a.signInWithEmailAndPassword(email, pass);
     $("authDlg").close(); $("aPass").value = "";
   } catch (err) { fail(err); }
@@ -983,7 +1009,57 @@ function showUser(u) {
   if (u.photoURL) { av.textContent = ""; av.style.backgroundImage = `url("${u.photoURL.replace(/"/g, "")}")`; }
   else { av.style.backgroundImage = ""; av.textContent = (name[0] || "?").toUpperCase(); }
 }
-if (FIREBASE_CONFIG) getAuth().then(a => a.onAuthStateChanged(showUser)).catch(() => {});
+/* ---- Remember each visit (users can only write their own record) ---- */
+async function record(u) {
+  const F = firebase.firestore.FieldValue, google = u.providerData.some(p => p.providerId === "google.com");
+  await firebase.firestore().collection("users").doc(u.uid).set({
+    email: u.email || "", name: u.displayName || "", provider: google ? "Google" : "Email", photo: u.photoURL || "",
+    createdAt: new Date(u.metadata.creationTime), lastLogin: F.serverTimestamp(), logins: F.increment(1)
+  }, { merge: true });
+}
+
+/* ---- Admin panel: only shown when this account is listed in "admins" (checked by the database rules) ---- */
+let adminRows = [];
+const day = 864e5, dfmt = d => d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "–";
+const escH = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+async function checkAdmin(u) {
+  const panel = $("adminPanel");
+  if (!u) { panel.hidden = true; adminRows = []; return; }
+  try { const d = await firebase.firestore().collection("admins").doc(u.uid).get(); panel.hidden = !d.exists; if (d.exists) loadUsers(); }
+  catch (e) { panel.hidden = true; }
+}
+async function loadUsers() {
+  $("admStatus").textContent = "Loading…";
+  try {
+    const snap = await firebase.firestore().collection("users").orderBy("createdAt", "desc").limit(1000).get();
+    adminRows = snap.docs.map(d => { const x = d.data(); return { id: d.id, name: x.name || "", email: x.email || "", provider: x.provider || "", photo: x.photo || "",
+      created: x.createdAt && x.createdAt.toDate ? x.createdAt.toDate() : null, last: x.lastLogin && x.lastLogin.toDate ? x.lastLogin.toDate() : null, visits: x.logins || 0 }; });
+    const now = Date.now(), today = new Date(); today.setHours(0, 0, 0, 0);
+    $("admTotal").textContent = adminRows.length;
+    $("admToday").textContent = adminRows.filter(r => r.created && r.created >= today).length;
+    $("admWeek").textContent = adminRows.filter(r => r.created && now - r.created < 7 * day).length;
+    $("admActive").textContent = adminRows.filter(r => r.last && r.last >= today).length;
+    $("admRows").innerHTML = adminRows.length ? adminRows.map(r => `<tr>
+      <td><span class="avatar sm" ${r.photo ? `style="background-image:url(&quot;${escH(r.photo.replace(/"/g, ""))}&quot;)"` : ""}>${r.photo ? "" : escH((r.name || r.email || "?")[0].toUpperCase())}</span></td>
+      <td>${escH(r.name || "–")}</td><td class="name" title="${escH(r.email)}">${escH(r.email)}</td><td>${escH(r.provider)}</td>
+      <td>${dfmt(r.created)}</td><td>${dfmt(r.last)}</td><td class="num">${r.visits}</td></tr>`).join("")
+      : `<tr><td class="empty" colspan="7">No users yet.</td></tr>`;
+    $("admStatus").textContent = "Updated " + new Date().toLocaleTimeString();
+  } catch (e) { $("admStatus").textContent = "Couldn't load users (" + (e.code || e.message) + ")."; }
+}
+$("admRefresh").addEventListener("click", loadUsers);
+$("admCsv").addEventListener("click", () => {
+  const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const iso = d => d ? d.toISOString() : "";
+  const csv = ["Name,Email,Sign-in,Joined,Last visit,Visits"].concat(adminRows.map(r => [q(r.name), q(r.email), r.provider, iso(r.created), iso(r.last), r.visits].join(","))).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" })); a.download = "felix-vocal-remover-users.csv";
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+});
+
+if (FIREBASE_CONFIG) getAuth().then(a => a.onAuthStateChanged(u => {
+  showUser(u);
+  if (u) record(u).catch(() => {}).finally(() => checkAdmin(u)); else checkAdmin(null);
+})).catch(() => {});
 })();
 </script>
 </body></html>
