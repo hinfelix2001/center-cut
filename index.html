@@ -894,7 +894,14 @@ run();
 /* ---------- Accounts (Firebase Authentication) ---------- */
 (() => {
 "use strict";
-const FIREBASE_CONFIG = null;   // paste the firebaseConfig object from the Firebase console here
+const FIREBASE_CONFIG = {   // public web config (not a secret); project felix-vocal-remover
+  apiKey: "AIzaSyD8cyjCVHUbzIN5_8hwplua-VUMGbkWLdk",
+  authDomain: "felix-vocal-remover.firebaseapp.com",
+  projectId: "felix-vocal-remover",
+  storageBucket: "felix-vocal-remover.firebasestorage.app",
+  messagingSenderId: "522693142571",
+  appId: "1:522693142571:web:25c00ea7927cef59e6626e"
+};
 const SITE_HOSTS = ["hinfelix2001.github.io", "localhost", "127.0.0.1"];
 const $ = id => document.getElementById(id);
 if (!FIREBASE_CONFIG || !SITE_HOSTS.includes(location.hostname)) return;   // hidden until connected; logins only work on the real site
