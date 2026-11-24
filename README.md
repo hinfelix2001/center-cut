@@ -8,7 +8,11 @@ Free vocal remover by Felix. Split a stereo song into **vocals, drums, bass and 
 - Save the current mix or all four stems as WAV
 - Key & BPM finder: key, Camelot code, tempo and energy for the loaded song or a whole batch of files, tap tempo, save results as CSV
 
-## How it works
+## HD mode (AI)
+
+HD mode runs Demucs (HTDemucs v4 by Meta, MIT) in the browser with onnxruntime-web (WebGPU, WASM fallback), via the MIT-licensed `demucs-web` package. The 172 MB model downloads once from Hugging Face and is cached by the browser.
+
+## Quick mode: how it works
 
 1. **Drums:** harmonic/percussive separation (median filtering of the spectrogram) pulls out short hits.
 2. **Vocals:** from the tonal part, frequency bins that are identical in both channels (center-panned) are taken as the lead vocal.

@@ -112,6 +112,9 @@ input[type=range]{accent-color:#fff}
 .meter i{display:block;height:100%;background:#fff;box-shadow:0 0 8px #fff}
 .free{display:inline-block;align-self:flex-start;margin:12px 0 2px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
   padding:5px 12px;border:1px solid #fff;border-radius:999px;box-shadow:var(--glow);text-shadow:0 0 8px rgba(255,255,255,.6)}
+#quickOpts{display:flex;flex-direction:column;gap:14px}
+.modes button{padding:9px 16px;font-weight:600}
+#modeNote:empty{display:none}
 /* ---- Account ---- */
 [hidden]{display:none!important}
 .top{display:flex;flex-direction:column;gap:0}
@@ -238,6 +241,12 @@ button.link:hover:not(:disabled){box-shadow:none;color:#fff}
 
   <section class="panel" aria-labelledby="sep-h">
     <h2 id="sep-h">Separation</h2>
+    <div class="chips modes" role="group" aria-label="Separation mode">
+      <button data-mode="hd" aria-pressed="true">HD · AI model</button>
+      <button data-mode="quick" aria-pressed="false">Quick · instant</button>
+    </div>
+    <p class="note" id="modeNote"></p>
+    <div id="quickOpts">
     <div class="chips" role="group" aria-label="Presets">
       <button data-preset="gentle" aria-pressed="false">Gentle</button>
       <button data-preset="balanced" aria-pressed="true">Balanced</button>
@@ -275,6 +284,7 @@ button.link:hover:not(:disabled){box-shadow:none;color:#fff}
         <p>Higher pulls hits more cleanly out of the music, with more artifacts.</p>
       </div>
     </div>
+    </div>
     <div class="run">
       <button class="primary" id="go">Separate</button>
       <div class="bar" aria-hidden="true"><i id="prog"></i></div>
@@ -311,7 +321,8 @@ button.link:hover:not(:disabled){box-shadow:none;color:#fff}
     <p class="note" id="saveNote">Files come packed in a .zip. Unzip to get the WAVs.</p>
   </section>
 
-  <p class="note"><b>How it works.</b> First the song is split into short hits (drums) and steady tones by looking at how each frequency changes over time: a drum hit is a short burst across many frequencies, a note is a steady line. From the steady tones, the parts that sound identical in both speakers become the vocal, since lead vocals are almost always mixed dead center. Low tones become bass, and the rest is other instruments. The four stems always add back up to the exact original. It works best on studio stereo mixes; mono files, live recordings and vocals with heavy stereo reverb separate less cleanly.</p>
+  <p class="note"><b>HD mode</b> uses Demucs (HTDemucs v4 by Meta, MIT license), an AI model trained on thousands of songs, running right in your browser with your graphics card. It hears what a voice, a drum or a bass sounds like, so it gives clean vocals and instrumentals even on modern mixes with wide reverb and backing vocals.</p>
+  <p class="note"><b>Quick mode.</b> First the song is split into short hits (drums) and steady tones by looking at how each frequency changes over time: a drum hit is a short burst across many frequencies, a note is a steady line. From the steady tones, the parts that sound identical in both speakers become the vocal, since lead vocals are almost always mixed dead center. Low tones become bass, and the rest is other instruments. The four stems always add back up to the exact original. It works best on studio stereo mixes; mono files, live recordings and vocals with heavy stereo reverb separate less cleanly.</p>
 </div>
 
 <script>
@@ -553,7 +564,7 @@ async function loadFile(file) {
     setSource({ sr: buf.sampleRate, L: new Float32Array(L), R: new Float32Array(R) }, file.name,
       (buf.numberOfChannels > 1 ? "Stereo" : "Mono") + " · " + (buf.sampleRate/1000).toFixed(1) + " kHz · " + fmt(buf.duration), false);
     let diff = 0, tot = 0; for (let i = 0; i < L.length; i += 97) { diff += Math.abs(L[i]-R[i]); tot += Math.abs(L[i]) + Math.abs(R[i]); }
-    if (buf.numberOfChannels < 2 || (tot > 0 && diff / tot < 0.002)) {
+    if (mode === "quick" && (buf.numberOfChannels < 2 || (tot > 0 && diff / tot < 0.002))) {
       // vocals can't be found by position in mono, but drums and bass still can
       $("strength").value = 0; showVals();
       run("This file is mono, so vocals can't be separated. Drums, bass and other still work.");
@@ -570,20 +581,95 @@ drop.addEventListener("drop", e => { e.stopPropagation(); loadFile(e.dataTransfe
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", e => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
 
+/* ---------- HD mode: Demucs AI model (HTDemucs, MIT), runs on this computer ---------- */
+const AI_MODEL_URL = "https://huggingface.co/timcsy/demucs-web-onnx/resolve/main/htdemucs_embedded.onnx";
+const AI_ORT_URL = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.mjs";
+const AI_LIB_URL = "https://cdn.jsdelivr.net/npm/demucs-web@1.0.2/src/index.js";
+const AI = { proc: null, loading: null, gpu: false };
+let mode = "hd";
+async function hasWebGPU() { try { return !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch (e) { return false; } }
+async function fetchModel(onp) {
+  let cache = null;
+  try { cache = await caches.open("felix-ai-models-v1"); const hit = await cache.match(AI_MODEL_URL); if (hit) { onp(1, 1, true); return await hit.arrayBuffer(); } } catch (e) { cache = null; }
+  const res = await fetch(AI_MODEL_URL);
+  if (!res.ok || !res.body) throw new Error("AI model download failed (" + res.status + ")");
+  const total = +res.headers.get("Content-Length") || 180534758, reader = res.body.getReader(), chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onp(got, total, false); }
+  const blob = new Blob(chunks);
+  if (cache) try { await cache.put(AI_MODEL_URL, new Response(blob, { headers: { "Content-Type": "application/octet-stream" } })); } catch (e) {}
+  return await blob.arrayBuffer();
+}
+function loadAI(onStatus) {
+  if (AI.proc) return Promise.resolve(AI.proc);
+  if (!AI.loading) AI.loading = (async () => {
+    AI.gpu = await hasWebGPU();
+    const ort = await import(AI_ORT_URL);
+    ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency || 4) : 1;
+    const { DemucsProcessor } = await import(AI_LIB_URL);
+    const buf = await fetchModel((got, total, cached) => onStatus(cached ? "Loading AI model…" :
+      `Downloading AI model (one time only): ${(got / 1048576).toFixed(0)} / ${(total / 1048576).toFixed(0)} MB`, got / total));
+    onStatus("Starting AI model…", 1);
+    const proc = new DemucsProcessor({ ort, sessionOptions: { executionProviders: AI.gpu ? ["webgpu", "wasm"] : ["wasm"] } });
+    await proc.loadModel(buf);
+    AI.proc = proc; return proc;
+  })().catch(e => { AI.loading = null; throw e; });
+  return AI.loading;
+}
+async function to44k(L, R, sr) {
+  if (sr === 44100) return { L, R };
+  const oc = new OfflineAudioContext(2, Math.ceil(L.length * 44100 / sr), 44100), b = oc.createBuffer(2, L.length, sr);
+  b.copyToChannel(L, 0); b.copyToChannel(R, 1);
+  const s = oc.createBufferSource(); s.buffer = b; s.connect(oc.destination); s.start();
+  const out = await oc.startRendering();
+  return { L: new Float32Array(out.getChannelData(0)), R: new Float32Array(out.getChannelData(1)) };
+}
+async function aiSeparate(onStatus) {
+  const proc = await loadAI(onStatus);
+  if (src.sr !== 44100) { onStatus("Converting to 44.1 kHz…", 0); const r = await to44k(src.L, src.R, src.sr); src = { sr: 44100, L: r.L, R: r.R }; peaks = {}; }
+  const t0 = performance.now(), dur = src.L.length / 44100;
+  proc.onProgress = ({ progress }) => {
+    const el = (performance.now() - t0) / 1000, left = progress > 0.02 ? el / progress - el : 0;
+    onStatus(`AI separating (${AI.gpu ? "graphics card" : "CPU, slower"})… ${Math.round(progress * 100)}%` + (left ? ` · about ${fmt(left)} left` : ""), progress);
+  };
+  onStatus(`AI separating (${AI.gpu ? "graphics card" : "CPU, slower"})… 0%`, 0);
+  await new Promise(r => setTimeout(r, 30));
+  const res = await proc.separate(src.L, src.R);
+  const out = {};
+  for (const s of STEMS) {
+    const b = new AudioBuffer({ length: src.L.length, numberOfChannels: 2, sampleRate: 44100 });
+    b.copyToChannel(res[s.id].left, 0); b.copyToChannel(res[s.id].right, 1); out[s.id] = b;
+  }
+  return out;
+}
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll("[data-mode]").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  $("quickOpts").hidden = m === "hd";
+  $("modeNote").textContent = m === "hd"
+    ? "AI separation (Demucs by Meta) for clean vocals and instruments. First use downloads the 172 MB model once. It takes a few minutes per song (faster on a PC with a good graphics card in Chrome or Edge), so keep this tab open. Your song still never leaves your device."
+    : "Instant, lighter separation using stereo tricks. Use the settings below to fine-tune.";
+  if (stems) status("Mode changed. Press Separate to apply.");
+}
+document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+
 /* ---------- Run ---------- */
 let busy = false;
-async function run(doneMsg) {
+async function run(doneMsg, forceQuick) {
   if (!src || busy) return;
   busy = true; $("go").disabled = true; const wasPlaying = playing; stop();
-  const t0 = performance.now();
+  const t0 = performance.now(), hd = mode === "hd" && !forceQuick;
   status("Separating…");
+  const onStatus = (msg, f) => { status(msg); $("prog").style.width = (Math.max(0, Math.min(1, f)) * 100).toFixed(1) + "%"; };
   try {
-    stems = await separate(src.L, src.R, src.sr, params(), f => { $("prog").style.width = (f*100).toFixed(1) + "%"; status("Separating… " + Math.round(f*100) + "%"); });
+    stems = hd ? await aiSeparate(onStatus)
+      : await separate(src.L, src.R, src.sr, params(), f => { $("prog").style.width = (f*100).toFixed(1) + "%"; status("Separating… " + Math.round(f*100) + "%"); });
     peaks = {};
-    status(typeof doneMsg === "string" ? doneMsg : "Done in " + ((performance.now() - t0)/1000).toFixed(1) + " s", typeof doneMsg === "string");
+    const secs = (performance.now() - t0) / 1000;
+    status(typeof doneMsg === "string" ? doneMsg : (hd ? "AI separation done in " + fmt(secs) : forceQuick ? "Quick preview ready. Choose your own song for HD AI separation." : "Done in " + secs.toFixed(1) + " s"), typeof doneMsg === "string");
+    $("prog").style.width = "100%";
     ["play","saveMix","saveStems"].forEach(id => $(id).disabled = false);
     draw(); if (wasPlaying) play();
-  } catch (e) { status("Separation failed: " + e.message, true); }
+  } catch (e) { console.error(e); status((hd ? "AI separation failed (" + (e && e.message || e) + "). Try Quick mode or another browser." : "Separation failed: " + e.message), true); }
   busy = false; $("go").disabled = false;
 }
 $("go").addEventListener("click", () => run());
@@ -908,9 +994,9 @@ $("tap").addEventListener("click", () => {
 });
 
 /* ---------- Start with the demo ---------- */
-showVals(); updateMix(false);
+showVals(); updateMix(false); setMode("hd");
 setSource(makeDemo(), "Demo mix (synthesized)", "Stereo · 44.1 kHz · 0:12 · centered melody, drums, bass, keys left, plucks right. Drop your own song here.", true);
-run();
+run(undefined, true);   // instant preview; the AI model only downloads once someone separates a real song
 })();
 </script>
 <script>
