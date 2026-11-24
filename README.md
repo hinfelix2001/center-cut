@@ -1,6 +1,6 @@
-# Center Cut
+# Felix Vocal Remover
 
-Split a stereo song into **vocals, drums, bass and other** right in your browser, then remix it: karaoke, acapella, drumless or bassless practice tracks.
+Free vocal remover by Felix. Split a stereo song into **vocals, drums, bass and other** right in your browser, then remix it: karaoke, acapella, drumless or bassless practice tracks.
 
 - Nothing is uploaded. All processing runs locally in the browser.
 - 4-stem mixer with volume, mute and solo

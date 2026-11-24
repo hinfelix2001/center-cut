@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Center Cut Vocal Remover</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Felix Vocal Remover</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -23,7 +23,7 @@ h2{font-family:var(--display);font-size:15px;margin:0;letter-spacing:.06em;text-
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .drop{border:1.5px dashed var(--line);border-radius:8px;padding:18px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;cursor:pointer;transition:border-color .15s,background .15s}
 .drop:hover,.drop.over{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
-.drop .meta{flex:1;min-width:0}
+.drop .meta{flex:1 1 220px;min-width:0}
 .drop strong{display:block;overflow-wrap:anywhere}
 .drop small{color:var(--muted);font-family:var(--mono);font-size:12.5px}
 .tag{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
@@ -110,16 +110,71 @@ input[type=range]{accent-color:#fff}
 .tbl .empty{color:var(--muted);text-align:center;padding:16px}
 .meter{display:inline-block;width:54px;height:5px;border-radius:3px;background:rgba(255,255,255,.12);vertical-align:middle;margin-right:8px;overflow:hidden}
 .meter i{display:block;height:100%;background:#fff;box-shadow:0 0 8px #fff}
+.free{display:inline-block;align-self:flex-start;margin:12px 0 2px;font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  padding:5px 12px;border:1px solid #fff;border-radius:999px;box-shadow:var(--glow);text-shadow:0 0 8px rgba(255,255,255,.6)}
+/* ---- Account ---- */
+[hidden]{display:none!important}
+.top{display:flex;flex-direction:column;gap:0}
+.acct{align-self:flex-end;display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;justify-content:flex-end}
+.acct button{padding:7px 16px;font-size:14px}
+.user{display:flex;align-items:center;gap:10px;min-width:0}
+.avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#000;font-family:var(--display);font-weight:700;font-size:14px;box-shadow:var(--glow);background-size:cover;background-position:center;flex:none}
+.uname{font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+dialog{border:1px solid var(--line);border-radius:20px;padding:0;color:var(--fg);width:min(400px,calc(100vw - 32px));
+  background:linear-gradient(160deg,rgba(40,40,40,.85),rgba(10,10,10,.9));backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 30px 80px rgba(0,0,0,.7),0 0 40px rgba(255,255,255,.08)}
+dialog::backdrop{background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+#authForm{display:flex;flex-direction:column;gap:12px;padding:26px 22px 20px;position:relative}
+.tabs{margin:0 0 6px}
+.field{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500;color:var(--muted)}
+.field input{font:inherit;font-size:15px;color:var(--fg);background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.field input:focus{outline:none;border-color:#fff;box-shadow:var(--glow)}
+#aMsg:empty{display:none}
+.or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-family:var(--mono)}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+button.link{background:none;border:0;box-shadow:none;color:var(--muted);text-decoration:underline;padding:4px;font-size:13px;align-self:center}
+button.link:hover:not(:disabled){box-shadow:none;color:#fff}
+.x{position:absolute;top:10px;right:10px;width:34px;height:34px;padding:0;font-size:20px;line-height:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #tap.hit{box-shadow:0 0 30px rgba(255,255,255,.9);border-color:#fff}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 </head><body><canvas id="bg" aria-hidden="true"></canvas>
 <div class="wrap">
-  <header>
-    <h1>Center <span>Cut</span></h1>
-    <p class="lede">Split a stereo song into vocals, drums, bass and other instruments, then remix it: karaoke, acapella, drumless or bassless practice tracks. Everything runs in your browser; your file is never uploaded.</p>
+  <header class="top">
+    <div class="acct" id="acct" hidden>
+      <button id="loginBtn">Log in</button>
+      <button class="primary" id="signupBtn">Sign up</button>
+      <div class="user" id="userBox" hidden>
+        <span class="avatar" id="avatar" aria-hidden="true"></span>
+        <span class="uname" id="userName"></span>
+        <button id="logoutBtn">Log out</button>
+      </div>
+    </div>
+    <h1>Felix <span>Vocal Remover</span></h1>
+    <p class="free">100% free · nothing uploaded</p>
+    <p class="lede">Remove the vocals from any song for free. Split a stereo song into vocals, drums, bass and other instruments, then remix it: karaoke, acapella, drumless or bassless practice tracks. Everything runs in your browser; your file is never uploaded.</p>
   </header>
+
+  <dialog id="authDlg" aria-labelledby="authTitle">
+    <form id="authForm" novalidate>
+      <button type="button" class="x" id="aClose" aria-label="Close">×</button>
+      <h2 id="authTitle" class="sr">Account</h2>
+      <div class="chips tabs" role="group" aria-label="Log in or sign up">
+        <button type="button" data-tab="in" aria-pressed="true">Log in</button>
+        <button type="button" data-tab="up" aria-pressed="false">Sign up</button>
+      </div>
+      <label class="field" id="nameRow" hidden>Name<input id="aName" autocomplete="name" maxlength="60"></label>
+      <label class="field">Email<input id="aEmail" type="email" autocomplete="email" required></label>
+      <label class="field">Password<input id="aPass" type="password" autocomplete="current-password" required minlength="6"></label>
+      <p class="status" id="aMsg" role="status"></p>
+      <button class="primary" id="aSubmit" type="submit">Log in</button>
+      <div class="or"><span>or</span></div>
+      <button type="button" id="aGoogle">Continue with Google</button>
+      <button type="button" class="link" id="aForgot">Forgot password?</button>
+    </form>
+  </dialog>
 
   <section class="panel" aria-labelledby="src-h">
     <h2 id="src-h">Source</h2>
@@ -833,6 +888,95 @@ $("tap").addEventListener("click", () => {
 showVals(); updateMix(false);
 setSource(makeDemo(), "Demo mix (synthesized)", "Stereo · 44.1 kHz · 0:12 · centered melody, drums, bass, keys left, plucks right. Drop your own song here.", true);
 run();
+})();
+</script>
+<script>
+/* ---------- Accounts (Firebase Authentication) ---------- */
+(() => {
+"use strict";
+const FIREBASE_CONFIG = null;   // paste the firebaseConfig object from the Firebase console here
+const SITE_HOSTS = ["hinfelix2001.github.io", "localhost", "127.0.0.1"];
+const $ = id => document.getElementById(id);
+if (!FIREBASE_CONFIG || !SITE_HOSTS.includes(location.hostname)) return;   // hidden until connected; logins only work on the real site
+$("acct").hidden = false;
+
+const SDK = "https://cdn.jsdelivr.net/npm/firebase@10.12.2/";
+const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => bad(new Error("Couldn't load the login service.")); document.head.appendChild(s); });
+let authP = null;
+const getAuth = () => authP || (authP = (async () => {
+  if (!FIREBASE_CONFIG) throw new Error("Login isn't connected yet.");
+  await load(SDK + "firebase-app-compat.js"); await load(SDK + "firebase-auth-compat.js");
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const a = firebase.auth(); a.useDeviceLanguage(); return a;
+})());
+
+const MSG = {
+  "auth/invalid-credential": "Wrong email or password.", "auth/wrong-password": "Wrong email or password.", "auth/user-not-found": "No account with that email. Sign up first.",
+  "auth/email-already-in-use": "That email already has an account. Log in instead.", "auth/weak-password": "Password needs at least 6 characters.",
+  "auth/invalid-email": "That email doesn't look right.", "auth/missing-password": "Enter your password.", "auth/too-many-requests": "Too many tries. Wait a minute and try again.",
+  "auth/popup-closed-by-user": "Google sign-in was closed.", "auth/cancelled-popup-request": "", "auth/popup-blocked": "Your browser blocked the Google window. Allow pop-ups and try again.",
+  "auth/unauthorized-domain": "This web address isn't allowed in Firebase yet.", "auth/network-request-failed": "No internet connection."
+};
+const say = (t, err) => { $("aMsg").textContent = t; $("aMsg").classList.toggle("err", !!err); };
+const fail = e => say(e && e.code in MSG ? MSG[e.code] : (e && e.message) || "Something went wrong.", true);
+
+let mode = "in";
+function setMode(m) {
+  mode = m; say("");
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === m));
+  $("nameRow").hidden = m !== "up"; $("aSubmit").textContent = m === "up" ? "Create account" : "Log in";
+  $("aPass").autocomplete = m === "up" ? "new-password" : "current-password"; $("aForgot").hidden = m === "up";
+}
+const open = m => { setMode(m); $("authDlg").showModal(); (m === "up" ? $("aName") : $("aEmail")).focus(); };
+$("loginBtn").addEventListener("click", () => open("in"));
+$("signupBtn").addEventListener("click", () => open("up"));
+$("aClose").addEventListener("click", () => $("authDlg").close());
+$("authDlg").addEventListener("click", e => { if (e.target === $("authDlg")) $("authDlg").close(); });
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => setMode(b.dataset.tab)));
+
+const busy = on => ["aSubmit", "aGoogle", "aForgot"].forEach(id => $(id).disabled = on);
+$("authForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const email = $("aEmail").value.trim(), pass = $("aPass").value, name = $("aName").value.trim();
+  if (!email) return say("Enter your email.", true);
+  if (pass.length < 6) return say("Password needs at least 6 characters.", true);
+  busy(true); say(mode === "up" ? "Creating your account…" : "Logging in…");
+  try {
+    const a = await getAuth();
+    if (mode === "up") {
+      const cred = await a.createUserWithEmailAndPassword(email, pass);
+      if (name) { await cred.user.updateProfile({ displayName: name }); showUser(a.currentUser); }
+    } else await a.signInWithEmailAndPassword(email, pass);
+    $("authDlg").close(); $("aPass").value = "";
+  } catch (err) { fail(err); }
+  busy(false);
+});
+$("aGoogle").addEventListener("click", async () => {
+  busy(true); say("Opening Google…");
+  try { const a = await getAuth(); await a.signInWithPopup(new firebase.auth.GoogleAuthProvider()); $("authDlg").close(); }
+  catch (err) { fail(err); }
+  busy(false);
+});
+$("aForgot").addEventListener("click", async () => {
+  const email = $("aEmail").value.trim();
+  if (!email) return say("Type your email above first, then press Forgot password.", true);
+  busy(true);
+  try { const a = await getAuth(); await a.sendPasswordResetEmail(email); say("Check your inbox for a link to reset your password."); }
+  catch (err) { fail(err); }
+  busy(false);
+});
+$("logoutBtn").addEventListener("click", async () => { try { (await getAuth()).signOut(); } catch (e) {} });
+
+function showUser(u) {
+  $("loginBtn").hidden = $("signupBtn").hidden = !!u; $("userBox").hidden = !u;
+  if (!u) return;
+  const name = u.displayName || (u.email || "").split("@")[0];
+  $("userName").textContent = name; $("userName").title = u.email || "";
+  const av = $("avatar");
+  if (u.photoURL) { av.textContent = ""; av.style.backgroundImage = `url("${u.photoURL.replace(/"/g, "")}")`; }
+  else { av.style.backgroundImage = ""; av.textContent = (name[0] || "?").toUpperCase(); }
+}
+if (FIREBASE_CONFIG) getAuth().then(a => a.onAuthStateChanged(showUser)).catch(() => {});
 })();
 </script>
 </body></html>
