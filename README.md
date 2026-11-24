@@ -6,6 +6,7 @@ Split a stereo song into **vocals, drums, bass and other** right in your browser
 - 4-stem mixer with volume, mute and solo
 - Quick mixes: Original, No vocals, Vocals only, No drums, No bass, Drums only, Bass only
 - Save the current mix or all four stems as WAV
+- Key & BPM finder: key, Camelot code, tempo and energy for the loaded song or a whole batch of files, tap tempo, save results as CSV
 
 ## How it works
 
